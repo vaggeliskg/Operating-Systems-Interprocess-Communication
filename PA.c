@@ -1,4 +1,5 @@
 #define TEXT_SZ 2048
+#define PACKET_SIZE 15
 
 #include <unistd.h>
 #include <stdlib.h>
@@ -28,36 +29,65 @@ void* sender(void* args) {
     while(shared_stuff->running) {
         printf("Write something for sender of PA: ");
         fgets(shared_stuff->local_buffer_PA, BUFSIZ/2, stdin);
-        // if(strnlen(shared_stuff->local_buffer_PA) > 15) {
-        //     int size = strnlen(shared_stuff->local_buffer_PA);
-        //     for(int i=0;i<15;i++) {
-        //         char packet[16];
-        //         strncpy(shared_stuff->some_text_for_PA, shared_stuff->local_buffer_PA, TEXT_SZ);
-        //     }
-        // }
-        strncpy(shared_stuff->some_text_for_PA, shared_stuff->local_buffer_PA, TEXT_SZ);
+        int length = strlen(shared_stuff->local_buffer_PA);
+        int i;
+        if(length >= PACKET_SIZE) {
+            printf("bikaa\n");
+            for (i = 0; i < length; i += PACKET_SIZE) {
+                char packet[PACKET_SIZE + 1]; // Packet size + 1 for null terminator
+                strncpy(packet, shared_stuff->local_buffer_PA + i, PACKET_SIZE);
+                //packet[PACKET_SIZE] = '\0'; // Null-terminate the packet
+                strncpy(shared_stuff->some_text_for_PA, packet, PACKET_SIZE);
+                sem_post(&shared_stuff->semB_test);
+                shared_stuff->A = 1;
+            }
+        }
+        else {
+            strncpy(shared_stuff->some_text_for_PA, shared_stuff->local_buffer_PA, TEXT_SZ);
+            sem_post(&shared_stuff->semB_test);
+            shared_stuff->A = 1;
+        }
+        //strncpy(shared_stuff->some_text_for_PA, shared_stuff->local_buffer_PA, TEXT_SZ);
         if (strncmp(shared_stuff->local_buffer_PA, "end", 3) == 0) {
             shared_stuff->running = 0;
             sem_post(&shared_stuff->semA_test);
         }
-        shared_stuff->A = 1;
-        sem_post(&shared_stuff->semB_test);
+        //shared_stuff->A = 1;
+        //sem_post(&shared_stuff->semB_test);
     }
 }
 
 void* receiver(void* args) {
     struct shared_use_st *shared_stuff = (struct shared_use_st *)args;
+    int full_message = 0;
     while(shared_stuff->running) {
         sem_wait(&shared_stuff->semA_test);
-        shared_stuff->A = 0;
         if(shared_stuff->A == 1) {
+            shared_stuff->A = 0;
             if(!shared_stuff->running) {
                 break;
             }
         }
-        strncpy(shared_stuff->local_buffer_PA, shared_stuff->some_text_for_PB, TEXT_SZ); 
-        if(strlen(shared_stuff->local_buffer_PA) !=0 ) {
-            printf("\nPB wrote: %s\n",shared_stuff->local_buffer_PA);
+        if(strlen(shared_stuff->some_text_for_PB) < PACKET_SIZE) {
+			printf("mikro\n");
+            strncpy(shared_stuff->local_buffer_PA, shared_stuff->some_text_for_PB, TEXT_SZ);
+			if(strlen(shared_stuff->local_buffer_PA) !=0 ) {
+				printf("\nPA wrote: %s\n",shared_stuff->local_buffer_PA);
+			}
+		}
+        else {
+            printf("bla\n");
+            strcat(shared_stuff->local_buffer_PA, shared_stuff->some_text_for_PB);
+            //strncpy(shared_stuff->local_buffer_PA, shared_stuff->some_text_for_PB, TEXT_SZ); 
+            if (strlen(shared_stuff->some_text_for_PB) < PACKET_SIZE) {
+                full_message = 1;
+            }
+            if(full_message) {
+                if(strlen(shared_stuff->local_buffer_PA) !=0 ) {
+                    printf("\nPB wrote: %s\n",shared_stuff->local_buffer_PA);
+                    shared_stuff->local_buffer_PA[0] = '\0';
+                }
+            }
         }
     }
  }

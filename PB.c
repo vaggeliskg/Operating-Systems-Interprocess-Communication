@@ -1,4 +1,5 @@
 #define TEXT_SZ 2048
+#define PACKET_SIZE 15
 
 #include <unistd.h>
 #include <stdlib.h>
@@ -29,18 +30,36 @@ void* sender(void* args) {
 	while(shared_stuff->running) {
 		printf("Write something for sender of PB: ");
 		fgets(shared_stuff->local_buffer_PB, BUFSIZ/2, stdin);
-		strncpy(shared_stuff->some_text_for_PB, shared_stuff->local_buffer_PB, TEXT_SZ);
+		
+		int length = strlen(shared_stuff->local_buffer_PB);
+        int i;
+		if(length >= PACKET_SIZE) {
+			for (i = 0; i < length; i += PACKET_SIZE) {
+				char packet[PACKET_SIZE + 1]; // Packet size + 1 for null terminator
+				strncpy(packet, shared_stuff->local_buffer_PB + i, PACKET_SIZE);
+				//packet[PACKET_SIZE] = '\0'; // Null-terminate the packet
+				strncpy(shared_stuff->some_text_for_PB, packet, PACKET_SIZE);
+				shared_stuff->B = 1;
+				sem_post(&shared_stuff->semA_test);
+			}
+		}
+		else {
+            strncpy(shared_stuff->some_text_for_PB, shared_stuff->local_buffer_PB, TEXT_SZ);
+			shared_stuff->B = 1;
+			sem_post(&shared_stuff->semA_test);
+		}
+		
+		//strncpy(shared_stuff->some_text_for_PB, shared_stuff->local_buffer_PB, TEXT_SZ);
 		if(strncmp(shared_stuff->local_buffer_PB, "end", 3) == 0) {
 			shared_stuff->running = 0;
 			sem_post(&shared_stuff->semB_test);
 		}
-		shared_stuff->B = 1;
-		sem_post(&shared_stuff->semA_test);
 	}
 }
 
 void* receiver(void* args) {
     struct shared_use_st *shared_stuff = (struct shared_use_st *)args;
+	int full_message = 0;
 	while(shared_stuff->running) {
 		sem_wait(&shared_stuff->semB_test);
 		if(shared_stuff->B == 1) {
@@ -49,9 +68,25 @@ void* receiver(void* args) {
                 break;
             }
 		}
-		strncpy(shared_stuff->local_buffer_PB, shared_stuff->some_text_for_PA, TEXT_SZ); //might need to change later
-		if(strlen(shared_stuff->local_buffer_PB) !=0 ) {
-			printf("\nPA wrote: %s\n",shared_stuff->local_buffer_PB);
+		if(strlen(shared_stuff->some_text_for_PA) < PACKET_SIZE) {
+			printf("mikrooooo\n");
+			strncpy(shared_stuff->local_buffer_PB, shared_stuff->some_text_for_PA, TEXT_SZ);
+			if(strlen(shared_stuff->local_buffer_PB) !=0 ) {
+				printf("\nPA wrote: %s\n",shared_stuff->local_buffer_PB);
+			}
+		}
+		else {
+			printf("\nblaaaa");
+			strcat(shared_stuff->local_buffer_PB, shared_stuff->some_text_for_PA);
+			if (strlen(shared_stuff->some_text_for_PA) < PACKET_SIZE) {
+				full_message = 1;
+			}
+			if(full_message) {
+				if(strlen(shared_stuff->local_buffer_PB) !=0 ) {
+					printf("\nPA wrote: %s\n",shared_stuff->local_buffer_PB);
+					shared_stuff->local_buffer_PB[0] = '\0';
+				}
+			}
 		}
 	}
 }
