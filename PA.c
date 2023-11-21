@@ -18,36 +18,48 @@ struct shared_use_st {
     int running;
     sem_t semA_test;
 	sem_t semB_test;
+    // int number_of_A_messages;
+    // int number_of_B_messages;
 };
 
 
 void* sender(void* args) {
-    //sem_wait(&sem);
     struct shared_use_st *shared_stuff = (struct shared_use_st *)args;
-    printf("Write something for sender of PA: ");
-    fgets(shared_stuff->local_buffer_PA, BUFSIZ/2, stdin);
-    strncpy(shared_stuff->some_text_for_PA, shared_stuff->local_buffer_PA, TEXT_SZ);
-    if (strncmp(shared_stuff->local_buffer_PA, "end", 3) == 0) {
-        shared_stuff->running = 0;
+    while(shared_stuff->running) {
+        printf("Write something for sender of PA: ");
+        fgets(shared_stuff->local_buffer_PA, BUFSIZ/2, stdin);
+        // if(strnlen(shared_stuff->local_buffer_PA) > 15) {
+        //     int size = strnlen(shared_stuff->local_buffer_PA);
+        //     for(int i=0;i<15;i++) {
+        //         char packet[16];
+        //         strncpy(shared_stuff->some_text_for_PA, shared_stuff->local_buffer_PA, TEXT_SZ);
+        //     }
+        // }
+        strncpy(shared_stuff->some_text_for_PA, shared_stuff->local_buffer_PA, TEXT_SZ);
+        if (strncmp(shared_stuff->local_buffer_PA, "end", 3) == 0) {
+            shared_stuff->running = 0;
+            sem_post(&shared_stuff->semA_test);
+        }
+        shared_stuff->A = 1;
+        sem_post(&shared_stuff->semB_test);
     }
-    shared_stuff->A = 1;
-    sem_post(&shared_stuff->semA_test);
-    sem_post(&shared_stuff->semB_test);
 }
 
 void* receiver(void* args) {
     struct shared_use_st *shared_stuff = (struct shared_use_st *)args;
-    sem_wait(&shared_stuff->semA_test);
-    if(shared_stuff->A == 1) {
-        //sem_wait(&shared_stuff->semB_test);
+    while(shared_stuff->running) {
+        sem_wait(&shared_stuff->semA_test);
         shared_stuff->A = 0;
-        pthread_exit("leave");
+        if(shared_stuff->A == 1) {
+            if(!shared_stuff->running) {
+                break;
+            }
+        }
+        strncpy(shared_stuff->local_buffer_PA, shared_stuff->some_text_for_PB, TEXT_SZ); 
+        if(strlen(shared_stuff->local_buffer_PA) !=0 ) {
+            printf("\nPB wrote: %s\n",shared_stuff->local_buffer_PA);
+        }
     }
-    strncpy(shared_stuff->local_buffer_PA, shared_stuff->some_text_for_PB, TEXT_SZ); 
-    if(strlen(shared_stuff->local_buffer_PA) !=0 ) {
-        printf("\nPB wrote: %s\n",shared_stuff->local_buffer_PA);
-    }
-    //sem_post(&shared_stuff->semA);
  }
 
 int main() { 
@@ -72,30 +84,23 @@ int main() {
     pthread_t thread0,thread1;
 	shared_stuff = (struct shared_use_st *)shared_memory;
     sem_init(&shared_stuff->semA_test,1,0);
-    //sem_init(&shared_stuff->semB_test,1,0);
 
     shared_stuff->local_buffer_PA = buffer;
     shared_stuff->running = running;
     shared_stuff->A = 0;
     shared_stuff->B = 0;
-	while(running) {
-        if( (pthread_create(&thread1, NULL, &receiver, (void *)shared_stuff)) !=0) {
-            perror("failed to create receiver thread\n");
-        }
         if( (pthread_create(&thread0, NULL, &sender, (void *)shared_stuff)) !=0) {
             perror("failed to create sender thread\n");
         }
-        if( pthread_join(thread1, NULL) != 0) {
-            perror("failed to join thread\n");
-        }
-        if(shared_stuff->running == 0) {
-            running = 0;
-            break;
+        if( (pthread_create(&thread1, NULL, &receiver, (void *)shared_stuff)) !=0) {
+            perror("failed to create receiver thread\n");
         }
         if( pthread_join(thread0, NULL) != 0) {
             perror("failed to join thread\n");
         }
-	}
+        if( pthread_join(thread1, NULL) != 0) {
+            perror("failed to join thread\n");
+        }
 	if (shmdt(shared_memory) == -1) {
 		fprintf(stderr, "shmdt failed\n");
 		exit(EXIT_FAILURE);
