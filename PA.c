@@ -60,6 +60,7 @@ void* sender(void* args) {
         //strncpy(shared_stuff->some_text_for_PA, shared_stuff->local_buffer_PA, TEXT_SZ);
         if (strncmp(shared_stuff->local_buffer_PA, "end", 3) == 0) {
             shared_stuff->running = 0;
+            shared_stuff->A = 1;
             shared_stuff->number_of_A_messages--;
             sem_post(&shared_stuff->semA_test);
         }
@@ -74,7 +75,7 @@ void* receiver(void* args) {
         if(!shared_stuff->running) {
             break;
         }
-       if(shared_stuff->A == 1) {
+        if(shared_stuff->A == 1) {
             shared_stuff->A = 0;
         }
         if(strlen(shared_stuff->some_text_for_PB) < PACKET_SIZE && shared_stuff->messages_via_packets_B == 0) {
@@ -137,10 +138,13 @@ int main() {
     if( (pthread_create(&thread1, NULL, &receiver, (void *)shared_stuff)) !=0) {
         perror("failed to create receiver thread\n");
     }
-    if( pthread_join(thread0, NULL) != 0) {
+    if( pthread_join(thread1, NULL) != 0) {
         perror("failed to join thread\n");
     }
-    if( pthread_join(thread1, NULL) != 0) {
+    if(shared_stuff->running == 0 && shared_stuff->B == 1){
+        pthread_cancel(thread0);
+    }
+    if( pthread_join(thread0, NULL) != 0) {
         perror("failed to join thread\n");
     }
     printf("A sent: %d messages\n",shared_stuff->number_of_A_messages);

@@ -63,6 +63,7 @@ void* sender(void* args) {
 		//strncpy(shared_stuff->some_text_for_PB, shared_stuff->local_buffer_PB, TEXT_SZ);
 		if(strncmp(shared_stuff->local_buffer_PB, "end", 3) == 0) {
 			shared_stuff->running = 0;
+			shared_stuff->B = 1;
 			shared_stuff->number_of_B_messages--;
 			sem_post(&shared_stuff->semB_test);
 		}
@@ -135,20 +136,23 @@ int main() {
 	shared_stuff->messages_via_packets_B = 0;
 	shared_stuff->number_of_B_messages = 0;
 	shared_stuff->number_of_B_packets = 0;
-        if( (pthread_create(&thread0, NULL, &sender, (void *)shared_stuff)) !=0) {
-            perror("failed to create sender thread\n");
-        }
-		if( (pthread_create(&thread1, NULL, &receiver, (void *)shared_stuff)) !=0) {
-        	perror("failed to create receiver thread\n");
-        }
-        if( pthread_join(thread0, NULL) != 0) {
-            perror("failed to join thread\n");
-        }
-        if( pthread_join(thread1, NULL) != 0) {
-            perror("failed to join thread\n");
-        }
-		printf("B sent: %d messages\n",shared_stuff->number_of_B_messages);
-        printf("B received: %d messages\n",shared_stuff->number_of_A_messages);
+	if( (pthread_create(&thread0, NULL, &sender, (void *)shared_stuff)) !=0) {
+		perror("failed to create sender thread\n");
+	}
+	if( (pthread_create(&thread1, NULL, &receiver, (void *)shared_stuff)) !=0) {
+		perror("failed to create receiver thread\n");
+	}
+	if( pthread_join(thread1, NULL) != 0) {
+		perror("failed to join thread\n");
+	}
+	if(shared_stuff->running == 0 && shared_stuff->A == 1){
+        pthread_cancel(thread0);
+    }
+	if( pthread_join(thread0, NULL) != 0) {
+		perror("failed to join thread\n");
+	}
+	printf("B sent: %d messages\n",shared_stuff->number_of_B_messages);
+	printf("B received: %d messages\n",shared_stuff->number_of_A_messages);
 	if (shmdt(shared_memory) == -1) {
 		fprintf(stderr, "shmdt failed\n");
 		exit(EXIT_FAILURE);
