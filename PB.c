@@ -38,7 +38,7 @@ void* sender(void* args) {
 		
 		int length = strlen(shared_stuff->local_buffer_PB);
         int i;
-		if(length >= PACKET_SIZE) {
+		if(length > PACKET_SIZE) {
 			for (i = 0; i < length; i += PACKET_SIZE) {
 				char packet[PACKET_SIZE + 1]; // Packet size + 1 for null terminator
 				strncpy(packet, shared_stuff->local_buffer_PB + i, PACKET_SIZE);
@@ -50,14 +50,17 @@ void* sender(void* args) {
 				shared_stuff->number_of_B_packets++;
 				sem_wait(&shared_stuff->packet_sent_from_B);
 			}
-			shared_stuff->local_buffer_PB[0] = '\0';
-			shared_stuff->number_of_B_messages++;
+			// if(shared_stuff->messages_via_packets_B = 1) {
+				//shared_stuff->local_buffer_PB[0] = '\0';
+				shared_stuff->number_of_B_messages++;
+			// }
 		}
 		else {
             strncpy(shared_stuff->some_text_for_PB, shared_stuff->local_buffer_PB, TEXT_SZ);
-			shared_stuff->B = 1;
-			shared_stuff->number_of_B_messages++;
 			sem_post(&shared_stuff->semA_test);
+			shared_stuff->number_of_B_messages++;
+			shared_stuff->B = 1;
+			//shared_stuff->local_buffer_PA[0] = '\0';
 		}
 		
 		//strncpy(shared_stuff->some_text_for_PB, shared_stuff->local_buffer_PB, TEXT_SZ);
@@ -79,12 +82,14 @@ void* receiver(void* args) {
 			break;
 		}
 		if(shared_stuff->B == 1) {
+			shared_stuff->local_buffer_PB[0] = '\0';
 			shared_stuff->B = 0;
 		}
-		if(strlen(shared_stuff->some_text_for_PA) < PACKET_SIZE && shared_stuff->message_via_packets_A == 0) {
+		if(strlen(shared_stuff->some_text_for_PA) <= PACKET_SIZE && shared_stuff->message_via_packets_A == 0) {
 			strncpy(shared_stuff->local_buffer_PB, shared_stuff->some_text_for_PA, TEXT_SZ);
 			if(strlen(shared_stuff->local_buffer_PB) !=0 ) {
 				printf("\nPA wrote: %s\n",shared_stuff->local_buffer_PB);
+				shared_stuff->local_buffer_PB[0] = '\0';
 			}
 		}
 		else {

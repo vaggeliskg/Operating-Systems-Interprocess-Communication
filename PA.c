@@ -36,7 +36,7 @@ void* sender(void* args) {
         fgets(shared_stuff->local_buffer_PA, BUFSIZ/2, stdin);
         int length = strlen(shared_stuff->local_buffer_PA);
         int i;
-        if(length >= PACKET_SIZE) {
+        if(length > PACKET_SIZE) {
             for (i = 0; i < length; i += PACKET_SIZE) {
                 char packet[PACKET_SIZE + 1]; // Packet size + 1 for null terminator
                 strncpy(packet, shared_stuff->local_buffer_PA + i, PACKET_SIZE);
@@ -48,14 +48,17 @@ void* sender(void* args) {
                 shared_stuff->number_of_A_packets++;
                 sem_wait(&shared_stuff->packet_sent_from_A);
             }
-            shared_stuff->local_buffer_PA[0] = '\0';
-            shared_stuff->number_of_A_messages++;
+            // if( shared_stuff->message_via_packets_A = 1) {
+                //shared_stuff->local_buffer_PA[0] = '\0';
+                shared_stuff->number_of_A_messages++;
+            // }
         }
         else {
             strncpy(shared_stuff->some_text_for_PA, shared_stuff->local_buffer_PA, TEXT_SZ);
             sem_post(&shared_stuff->semB_test);
             shared_stuff->number_of_A_messages++;
             shared_stuff->A = 1;
+            //shared_stuff->local_buffer_PA[0] = '\0';
         }
         //strncpy(shared_stuff->some_text_for_PA, shared_stuff->local_buffer_PA, TEXT_SZ);
         if (strncmp(shared_stuff->local_buffer_PA, "end", 3) == 0) {
@@ -76,12 +79,14 @@ void* receiver(void* args) {
             break;
         }
         if(shared_stuff->A == 1) {
+            shared_stuff->local_buffer_PA[0] = '\0';
             shared_stuff->A = 0;
         }
-        if(strlen(shared_stuff->some_text_for_PB) < PACKET_SIZE && shared_stuff->messages_via_packets_B == 0) {
+        if(strlen(shared_stuff->some_text_for_PB) <= PACKET_SIZE && shared_stuff->messages_via_packets_B == 0) {
             strncpy(shared_stuff->local_buffer_PA, shared_stuff->some_text_for_PB, TEXT_SZ);
 			if(strlen(shared_stuff->local_buffer_PA) !=0 ) {
 				printf("\nPA wrote: %s\n",shared_stuff->local_buffer_PA);
+                shared_stuff->local_buffer_PA[0] = '\0';
 			}
 		}
         else {
