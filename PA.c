@@ -8,6 +8,7 @@
 #include <sys/shm.h>
 #include <pthread.h>
 #include <semaphore.h>
+#include <sys/time.h>
 
 struct shared_use_st {
     int A;
@@ -26,6 +27,13 @@ struct shared_use_st {
     int number_of_A_messages;
     int number_of_B_messages;
     int number_of_A_packets;
+    int number_of_B_packets;
+    long int time_for_A;
+    long int time_for_B;
+    struct timeval tv_A;
+    struct timeval tv_B;
+    int first_packet_A;
+    int first_packet_B;
 };
 
 
@@ -46,6 +54,10 @@ void* sender(void* args) {
                 shared_stuff->A = 1;
                 shared_stuff->message_via_packets_A = 1;
                 shared_stuff->number_of_A_packets++;
+                if(i == 0) {
+                    gettimeofday(&shared_stuff->tv_A, NULL);
+                    shared_stuff->first_packet_A = 1;
+                }
                 sem_wait(&shared_stuff->packet_sent_from_A);
             }
             // if( shared_stuff->message_via_packets_A = 1) {
@@ -58,13 +70,15 @@ void* sender(void* args) {
             sem_post(&shared_stuff->semB_test);
             shared_stuff->number_of_A_messages++;
             shared_stuff->A = 1;
+            shared_stuff->number_of_A_packets++;
+            gettimeofday(&shared_stuff->tv_A, NULL);
             //shared_stuff->local_buffer_PA[0] = '\0';
         }
-        //strncpy(shared_stuff->some_text_for_PA, shared_stuff->local_buffer_PA, TEXT_SZ);
         if (strncmp(shared_stuff->local_buffer_PA, "end", 3) == 0) {
             shared_stuff->running = 0;
             shared_stuff->A = 1;
             shared_stuff->number_of_A_messages--;
+            shared_stuff->number_of_A_packets--;
             sem_post(&shared_stuff->semA_test);
         }
     }
@@ -72,6 +86,7 @@ void* sender(void* args) {
 
 void* receiver(void* args) {
     struct shared_use_st *shared_stuff = (struct shared_use_st *)args;
+    struct timeval tv_receive;
     while(shared_stuff->running) {
         int full_message = 0;
         sem_wait(&shared_stuff->semA_test);
@@ -87,10 +102,15 @@ void* receiver(void* args) {
 			if(strlen(shared_stuff->local_buffer_PA) !=0 ) {
 				printf("\nPA wrote: %s\n",shared_stuff->local_buffer_PA);
                 shared_stuff->local_buffer_PA[0] = '\0';
+                gettimeofday(&tv_receive, NULL);
 			}
 		}
         else {
             sem_post(&shared_stuff->packet_sent_from_B);
+            if(shared_stuff->first_packet_B == 1) {
+                gettimeofday(&tv_receive, NULL);
+                shared_stuff->first_packet_B = 0;
+            }
             strcat(shared_stuff->local_buffer_PA, shared_stuff->some_text_for_PB);
             if (strlen(shared_stuff->some_text_for_PB) < PACKET_SIZE) {
                 full_message = 1;
@@ -103,6 +123,7 @@ void* receiver(void* args) {
                 }
             }
         }
+        shared_stuff->time_for_A += tv_receive.tv_usec - shared_stuff->tv_B.tv_usec;
     }
  }
 
@@ -113,7 +134,7 @@ int main() {
 	void *shared_memory = (void *)0;
 	struct shared_use_st *shared_stuff;
 	int shmid;
-	shmid = shmget((key_t)112456581, sizeof(struct shared_use_st), 0666 | IPC_CREAT);
+	shmid = shmget((key_t)9, sizeof(struct shared_use_st), 0666 | IPC_CREAT);
 	if (shmid == -1) {
 		fprintf(stderr, "shmget failed\n");
 		exit(EXIT_FAILURE);
@@ -137,6 +158,7 @@ int main() {
     shared_stuff->message_via_packets_A = 0;
     shared_stuff->number_of_A_messages = 0;
     shared_stuff->number_of_A_packets = 0;
+    shared_stuff->first_packet_A = 0;
     if( (pthread_create(&thread0, NULL, &sender, (void *)shared_stuff)) !=0) {
         perror("failed to create sender thread\n");
     }
@@ -152,11 +174,20 @@ int main() {
     if( pthread_join(thread0, NULL) != 0) {
         perror("failed to join thread\n");
     }
+    int average_packets = 0;
+    if(shared_stuff->number_of_A_messages != 0) {
+        average_packets = shared_stuff->number_of_A_packets / shared_stuff->number_of_A_messages;
+    }
+    int average_time = 0;
+    if(shared_stuff->number_of_B_messages != 0) {
+        average_time = shared_stuff->time_for_A / shared_stuff->number_of_B_messages;
+    }
     printf("A sent: %d messages\n",shared_stuff->number_of_A_messages);
     printf("A received: %d messages\n",shared_stuff->number_of_B_messages);
     printf("A sent: %d packets\n",shared_stuff->number_of_A_packets);
+    printf("Average packets per message for A: %d\n",average_packets);
+    printf("Average time for A: %d \n ",average_time);
 
-    
     if (shmdt(shared_memory) == -1) {
 		fprintf(stderr, "shmdt failed\n");
 		exit(EXIT_FAILURE);
