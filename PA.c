@@ -123,7 +123,7 @@ void* receiver(void* args) {
                 }
             }
         }
-        shared_stuff->time_for_A += tv_receive.tv_usec - shared_stuff->tv_B.tv_usec;
+        shared_stuff->time_for_A += (tv_receive.tv_usec - shared_stuff->tv_B.tv_usec);
     }
  }
 
