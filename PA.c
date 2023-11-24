@@ -86,7 +86,7 @@ void* sender(void* args) {
 
 void* receiver(void* args) {
     struct shared_use_st *shared_stuff = (struct shared_use_st *)args;
-    struct timeval tv_receive;
+    struct timeval tv_receive_A;
     while(shared_stuff->running) {
         int full_message = 0;
         sem_wait(&shared_stuff->semA_test);
@@ -102,13 +102,13 @@ void* receiver(void* args) {
 			if(strlen(shared_stuff->local_buffer_PA) !=0 ) {
 				printf("\nPA wrote: %s\n",shared_stuff->local_buffer_PA);
                 shared_stuff->local_buffer_PA[0] = '\0';
-                gettimeofday(&tv_receive, NULL);
+                gettimeofday(&tv_receive_A, NULL);
 			}
 		}
         else {
             sem_post(&shared_stuff->packet_sent_from_B);
             if(shared_stuff->first_packet_B == 1) {
-                gettimeofday(&tv_receive, NULL);
+                gettimeofday(&tv_receive_A, NULL);
                 shared_stuff->first_packet_B = 0;
             }
             strcat(shared_stuff->local_buffer_PA, shared_stuff->some_text_for_PB);
@@ -123,7 +123,7 @@ void* receiver(void* args) {
                 }
             }
         }
-        shared_stuff->time_for_A += (tv_receive.tv_usec - shared_stuff->tv_B.tv_usec);
+        shared_stuff->time_for_A += (tv_receive_A.tv_usec - shared_stuff->tv_B.tv_usec);
     }
  }
 
