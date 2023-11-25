@@ -47,9 +47,9 @@ void* sender(void* args) {
         int i;
 		if(length > PACKET_SIZE) {
 			for (i = 0; i < length; i += PACKET_SIZE) {
-				char packet[PACKET_SIZE + 1]; // Packet size + 1 for null terminator
+				char packet[PACKET_SIZE + 1]; 
 				strncpy(packet, shared_stuff->local_buffer_PB + i, PACKET_SIZE);
-				packet[PACKET_SIZE] = '\0'; // Null-terminate the packet
+				packet[PACKET_SIZE] = '\0'; 
 				strncpy(shared_stuff->some_text_for_PB, packet, PACKET_SIZE);
 				sem_post(&shared_stuff->semA_test);
 				shared_stuff->B = 1;
@@ -61,10 +61,7 @@ void* sender(void* args) {
 				}
 				sem_wait(&shared_stuff->packet_sent_from_B);
 			}
-			// if(shared_stuff->messages_via_packets_B = 1) {
-				//shared_stuff->local_buffer_PB[0] = '\0';
-				shared_stuff->number_of_B_messages++;
-			// }
+			shared_stuff->number_of_B_messages++;
 		}
 		else {
             strncpy(shared_stuff->some_text_for_PB, shared_stuff->local_buffer_PB, TEXT_SZ);
@@ -73,10 +70,8 @@ void* sender(void* args) {
 			shared_stuff->B = 1;
 			shared_stuff->number_of_B_packets++;
 			gettimeofday(&shared_stuff->tv_B, NULL);
-			//shared_stuff->local_buffer_PA[0] = '\0';
 		}
 		
-		//strncpy(shared_stuff->some_text_for_PB, shared_stuff->local_buffer_PB, TEXT_SZ);
 		if(strncmp(shared_stuff->local_buffer_PB, "#BYE#", 5) == 0) {
 			shared_stuff->running = 0;
 			shared_stuff->B = 1;
@@ -147,7 +142,6 @@ int main() {
 		fprintf(stderr, "shmat failed\n");
 		exit(EXIT_FAILURE);
 	}
-	//printf("Shared memory segment with id %d attached at %p\n", shmid, shared_memory);
 
 	shared_stuff = (struct shared_use_st *)shared_memory;
 
