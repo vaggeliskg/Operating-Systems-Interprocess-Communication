@@ -10,6 +10,7 @@
 #include <semaphore.h>
 #include <sys/time.h>
 
+//Struct used in the shared memory segment
 struct shared_use_st {
     int A;
     int B;
@@ -36,35 +37,33 @@ struct shared_use_st {
     int first_packet_B;
 };
 
-
+//Thread responsible for sending messages to PB
 void* sender(void* args) {
     struct shared_use_st *shared_stuff = (struct shared_use_st *)args;
     while(shared_stuff->running) {
         printf("Write something for sender of PA: ");
         fgets(shared_stuff->local_buffer_PA, BUFSIZ/2, stdin);
-        int length = strlen(shared_stuff->local_buffer_PA);
+        int length = strlen(shared_stuff->local_buffer_PA);     //Calculate size of message
         int i;
-        if(length > PACKET_SIZE) {
+        if(length > PACKET_SIZE) {                              //If size > 15 then you need to divide it and send individual packets
             for (i = 0; i < length; i += PACKET_SIZE) {
-                char packet[PACKET_SIZE + 1]; // Packet size + 1 for null terminator
+                char packet[PACKET_SIZE + 1];                   // Packet size + 1 for null terminator
                 strncpy(packet, shared_stuff->local_buffer_PA + i, PACKET_SIZE);
-                packet[PACKET_SIZE] = '\0'; // Null-terminate the packet
+                packet[PACKET_SIZE] = '\0';                     // Null-terminate the packet
                 strncpy(shared_stuff->some_text_for_PA, packet, PACKET_SIZE);
-                sem_post(&shared_stuff->semB_test);
-                shared_stuff->A = 1;
+                sem_post(&shared_stuff->semB_test);             //Semaphore enabling the PB receiver to process the message
+                shared_stuff->A = 1;                      
                 shared_stuff->message_via_packets_A = 1;
                 shared_stuff->number_of_A_packets++;
                 if(i == 0) {
-                    gettimeofday(&shared_stuff->tv_A, NULL);
+                    gettimeofday(&shared_stuff->tv_A, NULL);   //If its the first packet then calculate the time it was sent
                     shared_stuff->first_packet_A = 1;
                 }
-                sem_wait(&shared_stuff->packet_sent_from_A);
+                sem_wait(&shared_stuff->packet_sent_from_A);  //Wait the PB receiver before you send the next packet
             }
-            // if( shared_stuff->message_via_packets_A = 1) {
-                //shared_stuff->local_buffer_PA[0] = '\0';
-                shared_stuff->number_of_A_messages++;
-            // }
+            shared_stuff->number_of_A_messages++;             //Increase the number of messages when you are done sending the packets
         }
+        //If the message is < 15 characters just send it , still increasing the packet numbers
         else {
             strncpy(shared_stuff->some_text_for_PA, shared_stuff->local_buffer_PA, TEXT_SZ);
             sem_post(&shared_stuff->semB_test);
@@ -72,9 +71,9 @@ void* sender(void* args) {
             shared_stuff->A = 1;
             shared_stuff->number_of_A_packets++;
             gettimeofday(&shared_stuff->tv_A, NULL);
-            //shared_stuff->local_buffer_PA[0] = '\0';
         }
-        if (strncmp(shared_stuff->local_buffer_PA, "end", 3) == 0) {
+        //If #BYE# is typed , terminate by switching running to 0
+        if (strncmp(shared_stuff->local_buffer_PA, "#BYE#", 5) == 0) {
             shared_stuff->running = 0;
             shared_stuff->A = 1;
             shared_stuff->number_of_A_messages--;
@@ -89,41 +88,43 @@ void* receiver(void* args) {
     struct timeval tv_receive_A;
     while(shared_stuff->running) {
         int full_message = 0;
-        sem_wait(&shared_stuff->semA_test);
+        sem_wait(&shared_stuff->semA_test);             //Semaphore waiting to receive a message
         if(!shared_stuff->running) {
             break;
-        }
-        if(shared_stuff->A == 1) {
-            shared_stuff->local_buffer_PA[0] = '\0';
+        } 
+        if(shared_stuff->A == 1) {                      //If PA was the last to write (A == 1) make A = 0
+            shared_stuff->local_buffer_PA[0] = '\0';    //and empty the local buffer 
             shared_stuff->A = 0;
         }
+        //If the message was < 15 characters and it's not part of a message that was sent via packets
         if(strlen(shared_stuff->some_text_for_PB) <= PACKET_SIZE && shared_stuff->messages_via_packets_B == 0) {
             strncpy(shared_stuff->local_buffer_PA, shared_stuff->some_text_for_PB, TEXT_SZ);
 			if(strlen(shared_stuff->local_buffer_PA) !=0 ) {
-				printf("\nPA wrote: %s\n",shared_stuff->local_buffer_PA);
+				printf("\nPB wrote: %s\n",shared_stuff->local_buffer_PA);
                 shared_stuff->local_buffer_PA[0] = '\0';
                 gettimeofday(&tv_receive_A, NULL);
 			}
 		}
+        //Else if its part of a message that was sent via packets
         else {
-            sem_post(&shared_stuff->packet_sent_from_B);
-            if(shared_stuff->first_packet_B == 1) {
+            sem_post(&shared_stuff->packet_sent_from_B); //Process each packet
+            if(shared_stuff->first_packet_B == 1) {      //Calculate time of day if it's the first packet
                 gettimeofday(&tv_receive_A, NULL);
                 shared_stuff->first_packet_B = 0;
             }
-            strcat(shared_stuff->local_buffer_PA, shared_stuff->some_text_for_PB);
-            if (strlen(shared_stuff->some_text_for_PB) < PACKET_SIZE) {
+            strcat(shared_stuff->local_buffer_PA, shared_stuff->some_text_for_PB);  //add the packet right next to the previous packet
+            if (strlen(shared_stuff->some_text_for_PB) < PACKET_SIZE) {             // main reason why shared_stuff->local_buffer_PA[0] = '\0'; is needed
                 full_message = 1;
             }
-            if(full_message) {
-                if(strlen(shared_stuff->local_buffer_PA) !=0 ) {
+            if(full_message) {                                                      //All the packets have been received
+                if(strlen(shared_stuff->local_buffer_PA) !=0 ) {          
                     printf("\nPB wrote: %s\n",shared_stuff->local_buffer_PA);
                     shared_stuff->local_buffer_PA[0] = '\0';
                     shared_stuff->messages_via_packets_B = 0;
                 }
             }
         }
-        shared_stuff->time_for_A += (tv_receive_A.tv_usec - shared_stuff->tv_B.tv_usec);
+        shared_stuff->time_for_A += (tv_receive_A.tv_usec - shared_stuff->tv_B.tv_usec); //Calculate the time between packets deliveries
     }
  }
 
@@ -134,6 +135,7 @@ int main() {
 	void *shared_memory = (void *)0;
 	struct shared_use_st *shared_stuff;
 	int shmid;
+    //Create shared memory
 	shmid = shmget((key_t)9, sizeof(struct shared_use_st), 0666 | IPC_CREAT);
 	if (shmid == -1) {
 		fprintf(stderr, "shmget failed\n");
@@ -144,8 +146,7 @@ int main() {
 		fprintf(stderr, "shmat failed\n");
 		exit(EXIT_FAILURE);
 	}
-	//printf("Shared memory segment with id %d attached at %p\n", shmid, shared_memory);
-
+    //Create threads, initialize semaphores, and necessary shared_stuff members vars
     pthread_t thread0,thread1;
 	shared_stuff = (struct shared_use_st *)shared_memory;
     sem_init(&shared_stuff->semA_test,1,0);
@@ -168,12 +169,14 @@ int main() {
     if( pthread_join(thread1, NULL) != 0) {
         perror("failed to join thread\n");
     }
+    //If the other process ended the interaction cancel the thread , dont wait for the sender of this process
     if(shared_stuff->running == 0 && shared_stuff->B == 1){
         pthread_cancel(thread0);
     }
     if( pthread_join(thread0, NULL) != 0) {
         perror("failed to join thread\n");
     }
+    //Stats calculations
     int average_packets = 0;
     if(shared_stuff->number_of_A_messages != 0) {
         average_packets = shared_stuff->number_of_A_packets / shared_stuff->number_of_A_messages;
@@ -182,6 +185,7 @@ int main() {
     if(shared_stuff->number_of_B_messages != 0) {
         average_time = shared_stuff->time_for_A / shared_stuff->number_of_B_messages;
     }
+    printf("\n");
     printf("A sent: %d messages\n",shared_stuff->number_of_A_messages);
     printf("A received: %d messages\n",shared_stuff->number_of_B_messages);
     printf("A sent: %d packets\n",shared_stuff->number_of_A_packets);

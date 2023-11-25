@@ -77,7 +77,7 @@ void* sender(void* args) {
 		}
 		
 		//strncpy(shared_stuff->some_text_for_PB, shared_stuff->local_buffer_PB, TEXT_SZ);
-		if(strncmp(shared_stuff->local_buffer_PB, "end", 3) == 0) {
+		if(strncmp(shared_stuff->local_buffer_PB, "#BYE#", 5) == 0) {
 			shared_stuff->running = 0;
 			shared_stuff->B = 1;
 			shared_stuff->number_of_B_messages--;
@@ -186,6 +186,7 @@ int main() {
     if(shared_stuff->number_of_A_messages != 0) {
         average_time = shared_stuff->time_for_B / shared_stuff->number_of_A_messages;
     }
+	printf("\n");
 	printf("B sent: %d messages\n",shared_stuff->number_of_B_messages);
 	printf("B received: %d messages\n",shared_stuff->number_of_A_messages);
 	printf("B sent: %d packets\n",shared_stuff->number_of_B_packets);
